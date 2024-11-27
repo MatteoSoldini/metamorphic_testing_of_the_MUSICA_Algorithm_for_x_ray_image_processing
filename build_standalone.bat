@@ -11,4 +11,4 @@ cd out
 cmake ../
 cmake --build . --target maverick-standalone --config Release
 
-xcopy shaders Release /e /v
+xcopy shaders Release\shaders /e /v /d /y
