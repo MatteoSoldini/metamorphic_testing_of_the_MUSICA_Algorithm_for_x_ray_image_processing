@@ -293,9 +293,9 @@ public:
         return currentIndex;
     }
 
-    ImTextureID getGradationHistogram();
+    void* getGradationHistogram();
 
-    ImTextureID getNoiseHistogram();
+    void* getNoiseHistogram();
 
 //     VkImageState* getInImage() { return &rgbImageStates[0]; };
 //     VkImageState* getContrastEnhancedImage() { return &rgbImageStates[1]; };

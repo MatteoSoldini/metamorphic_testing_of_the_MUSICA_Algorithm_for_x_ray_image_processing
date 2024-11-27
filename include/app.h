@@ -26,7 +26,7 @@ private:
         //"..\\..\\..\\test\\metamorphic_test\\ra\\head_2.raw_qn_0.001.raw";
     std::vector<uint16_t> imageData;
 
-    std::vector<VkDescriptorSet> imageDescriptorSets;
+    std::vector<ImTextureID> imageDescriptorSets;
 
     void draw();
 

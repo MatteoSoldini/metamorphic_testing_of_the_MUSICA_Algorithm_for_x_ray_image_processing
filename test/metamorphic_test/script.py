@@ -15,7 +15,7 @@ from scipy.spatial import distance
 RAW_IMAGE_SIZE = 3072
 INPUT_PATH = "..\\..\\raw_images\\"
 OUTPUT_PATH = "out\\"
-EXE_WORK_DIR = "..\\..\\out\\build\\x64-release"
+EXE_WORK_DIR = "..\\..\\out\\Release"
 EXE_FILE = "maverick-standalone.exe"
 R_CSV_FILE = "direct_robustness.csv"
 NR_CSV_FILE = "reg_based_robustness.csv"

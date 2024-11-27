@@ -51,7 +51,7 @@ void App::init() {
 
     imageDescriptorSets.resize(procImageViews.size());
     for (uint32_t i = 0; i < procImageViews.size(); i++) {
-        imageDescriptorSets[i] = ImGui_ImplVulkan_AddTexture(
+        imageDescriptorSets[i] = (ImTextureID)ImGui_ImplVulkan_AddTexture(
             vkState->getTextureSampler(),
             procImageViews[i],
             VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL

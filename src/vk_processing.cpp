@@ -2650,12 +2650,12 @@ bool VulkanProcessing::cleanup() {
     return true;
 }
 
-ImTextureID VulkanProcessing::getGradationHistogram() {
-    return gradHistDescriptorSet[currentIndex];
+void* VulkanProcessing::getGradationHistogram() {
+    return (void*)gradHistDescriptorSet[currentIndex];
 }
 
-ImTextureID VulkanProcessing::getNoiseHistogram() {
-    return noiseHistDescriptorSet[currentIndex];
+void* VulkanProcessing::getNoiseHistogram() {
+    return (void*)noiseHistDescriptorSet[currentIndex];
 }
 
 bool VulkanProcessing::debugProcess() {

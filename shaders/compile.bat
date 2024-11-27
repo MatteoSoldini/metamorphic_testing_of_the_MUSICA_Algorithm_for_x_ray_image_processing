@@ -29,5 +29,3 @@ C:\VulkanSDK\1.3.275.0\Bin\glslc.exe noise_hist.comp -o noise_hist.spv
 C:\VulkanSDK\1.3.275.0\Bin\glslc.exe noise_hist_render.comp -o noise_hist_render.spv
 C:\VulkanSDK\1.3.275.0\Bin\glslc.exe noise_reduction.comp -o noise_reduction.spv
 C:\VulkanSDK\1.3.275.0\Bin\glslc.exe gradation_curve_debug_render.comp -o gradation_curve_debug_render.spv
-
-pause
