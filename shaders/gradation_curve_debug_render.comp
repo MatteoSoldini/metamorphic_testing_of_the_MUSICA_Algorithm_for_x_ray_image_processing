@@ -1,0 +1,124 @@
+#version 450
+//#extension GL_EXT_debug_printf : enable
+
+#define MAX_POINTS 256
+#define CURVE_BINS 512
+#define IMAGE_WIDTH 512
+#define GRAD_HISTOGRAM_BINS 1024
+
+layout (local_size_x = IMAGE_WIDTH) in;
+
+struct Point {
+    float x;
+    float y;
+};
+
+layout (binding = 0, rgba8) uniform writeonly image2D outputImage;
+layout (binding = 1, r32ui) uniform uimage1D histImage;
+layout (binding = 2) buffer readonly HistogramMaxPoint {
+    uint maxValue;
+    uint maxBin;
+};
+layout (binding = 3) buffer GradationCurveObject {
+    Point points[MAX_POINTS];
+    uint pointsCount;
+
+    float t0;
+    float ta;
+    float t1;
+};
+
+float linearFunction(Point p1, Point p2, float x) {
+    float m = (p2.y - p1.y) / (p2.x - p1.x);
+
+    return m * x + p1.y;
+}
+
+float getY(float x) {
+    for (uint i = 0; i < pointsCount; i++) {
+        if (points[i].x == x) return points[i].y;
+
+        if (points[i].x <= x && points[i + 1].x >= x)
+            return linearFunction(points[i], points[i + 1], x - points[i].x);
+    }
+
+    return 0.0;
+}
+
+void main() {
+    // draw hist
+    uint invocationPos = gl_GlobalInvocationID.x;
+
+    float positionConversionFactor = float(GRAD_HISTOGRAM_BINS) / IMAGE_WIDTH;
+    //debugPrintfEXT("%f\n", positionConversionFactor);
+    uint histogramBinPos = uint(invocationPos * positionConversionFactor);
+
+    uint value = imageLoad(histImage, int(histogramBinPos)).r;
+
+    // if (histogramBinPos > 2000) {
+    //     debugPrintfEXT("%i> %i\n", histogramBinPos, invocationPos);
+    // }
+
+    ivec2 imageSize = imageSize(outputImage);
+    uint barWidth = 1;
+    uint barHeight = uint(float(value) * (float(imageSize.y) / float(maxValue + 1)));
+    if (barHeight > imageSize.y) barHeight = imageSize.y - 1; // clip bar height
+
+    //debugPrintfEXT("%f, %i\n", barWidth, barHeight);
+
+    // if (histogramBinPos > 0 && histogramBinPos < 100)
+    //     debugPrintfEXT("%i> %i\n", histogramBinPos, hist[histogramBinPos]);
+
+    uint startX = invocationPos;
+    uint startY = imageSize.y - barHeight - 1;
+
+    //debugPrintfEXT("%i \n", startX);
+
+    imageStore(outputImage, ivec2(startX, imageSize.y - 1), vec4(1, 0, 0, 1));
+
+    for (uint x = startX; x < uint(startX + barWidth); x++) {
+        for (uint y = 0; y < imageSize.y; y++) {
+            if (y >= startY && y < startY + barHeight) {
+                if (histogramBinPos <= maxBin && histogramBinPos + positionConversionFactor > maxBin) {
+                    imageStore(outputImage, ivec2(x, y), vec4(1, 0, 1, 1));
+                } else {
+                    imageStore(outputImage, ivec2(x, y), vec4(1, 1, 1, 1));
+                }
+            } else {
+                imageStore(outputImage, ivec2(x, y), vec4(0, 0, 0, 1));
+            }
+        }
+    }
+
+    // draw curve
+    float curvePosition = invocationPos * (1.0 / CURVE_BINS);
+    
+    // if (invocationPos == 0)
+    //     debugPrintfEXT("%f\n", t0);
+
+    uint posX = uint(curvePosition * float(CURVE_BINS) * (float(imageSize.x) / CURVE_BINS));
+    uint posY = (imageSize.y - 1) - uint(getY(curvePosition) * (imageSize.y - 1));
+
+    // draw t0
+    if (curvePosition <= t0 && t0 < (invocationPos + 1) * (1.0 / CURVE_BINS)) {
+        for (uint i = 0; i < imageSize.x; i++) {
+            imageStore(outputImage, ivec2(posX, i), vec4(1, 0, 0, 1));
+        }
+    }
+
+    // draw ta
+    if (curvePosition <= ta && ta < (invocationPos + 1) * (1.0 / CURVE_BINS)) {
+        for (uint i = 0; i < imageSize.x; i++) {
+            imageStore(outputImage, ivec2(posX, i), vec4(0, 1, 0, 1));
+        }
+    }
+
+    // draw t1
+    if (curvePosition <= t1 && t1 < (invocationPos + 1) * (1.0 / CURVE_BINS)) {
+        for (uint i = 0; i < imageSize.x; i++) {
+            imageStore(outputImage, ivec2(posX, i), vec4(1, 0, 0, 1));
+        }
+    }
+
+    imageStore(outputImage, ivec2(posX, posY), vec4(0, 0, 1, 1));
+}

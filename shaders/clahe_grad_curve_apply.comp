@@ -1,0 +1,161 @@
+#version 450
+//#extension GL_EXT_debug_printf : enable
+
+#define WORKGROUP_SIZE 32
+#define TILES_COUNT 4
+#define CLAHE_HISTOGRAM_BINS 256
+
+layout (local_size_x = WORKGROUP_SIZE, local_size_y = WORKGROUP_SIZE) in;
+
+struct Point {
+    float x;
+    float y;
+};
+
+layout (binding = 0, r32f) uniform writeonly image2D outputImage;
+layout (binding = 1, r32f) uniform readonly image2D inputImage;
+layout (binding = 2) readonly buffer GradationCurveObject {
+    Point points[TILES_COUNT][TILES_COUNT][CLAHE_HISTOGRAM_BINS];
+};
+
+float linearFunction(Point p1, Point p2, float x) {
+    float m = (p2.y - p1.y) / (p2.x - p1.x);
+
+    return m * x + p1.y;
+}
+
+float getY(Point points[CLAHE_HISTOGRAM_BINS], float x) {
+    for (uint i = 0; i < CLAHE_HISTOGRAM_BINS; i++) {
+        if (points[i].x == x) return points[i].y;
+
+        if (points[i].x <= x && points[i + 1].x >= x)
+            return linearFunction(points[i], points[i + 1], x - points[i].x);
+    }
+
+    return 0.0;
+}
+
+void main() {
+    ivec2 texelCoord = ivec2(gl_GlobalInvocationID.xy);
+
+    float pixel = imageLoad(inputImage, texelCoord).r;
+
+    uint GRID_TILE_SIZE = imageSize(inputImage).x / TILES_COUNT;
+
+    vec2 tilePixelCoord = vec2(
+        (texelCoord.x) / float(GRID_TILE_SIZE),
+        (texelCoord.y) / float(GRID_TILE_SIZE)
+    );
+
+    vec2 baseTileCoord = vec2(
+        uint(texelCoord.x / float(GRID_TILE_SIZE)) + 0.5,
+        uint(texelCoord.y / float(GRID_TILE_SIZE)) + 0.5
+    );
+
+    vec2 diffTileCoord = vec2(
+        tilePixelCoord.x - baseTileCoord.x,
+        tilePixelCoord.y - baseTileCoord.y
+    );
+
+    float combinedValue = 0.0;
+    
+    if (diffTileCoord.x == 0.0 && diffTileCoord.y == 0.0) {
+        combinedValue = getY(points[uint(floor(baseTileCoord.x))][uint(floor(baseTileCoord.y))], pixel);
+    } else if (diffTileCoord.x == 0.0) {
+        vec2 tileCentPos[2];
+        tileCentPos[0] = baseTileCoord;
+        tileCentPos[1] = vec2(baseTileCoord.x, baseTileCoord.y + sign(diffTileCoord.y));
+
+        for (uint i = 0; i < 2; i++) {
+            float tileDiff = tileCentPos[i].y - texelCoord.y / float(GRID_TILE_SIZE);
+
+            uvec2 currTilePos = {
+                uint(floor(tileCentPos[i].x)),
+                uint(floor(tileCentPos[i].y))
+            };
+
+            // clip tile pos
+            if (currTilePos.x > TILES_COUNT - 1) currTilePos.x = TILES_COUNT - 1;
+            if (currTilePos.y > TILES_COUNT - 1) currTilePos.y = TILES_COUNT - 1;
+
+            combinedValue += 
+                (1.0 - abs(tileDiff)) *
+                getY(
+                    points
+                        [currTilePos.x]
+                        [currTilePos.y],
+                    pixel
+                );
+        }
+    } else if (diffTileCoord.y == 0.0) {
+        vec2 tileCentPos[2];
+        tileCentPos[0] = baseTileCoord;
+        tileCentPos[1] = vec2(baseTileCoord.x + sign(diffTileCoord.x), baseTileCoord.y);
+
+        for (uint i = 0; i < 2; i++) {
+            float tileDiff = tileCentPos[i].x - texelCoord.x / float(GRID_TILE_SIZE);
+
+            uvec2 currTilePos = {
+                uint(floor(tileCentPos[i].x)),
+                uint(floor(tileCentPos[i].y))
+            };
+
+            // clip tile pos
+            if (currTilePos.x > TILES_COUNT - 1) currTilePos.x = TILES_COUNT - 1;
+            if (currTilePos.y > TILES_COUNT - 1) currTilePos.y = TILES_COUNT - 1;
+
+            combinedValue += 
+                (1.0 - abs(tileDiff)) *
+                getY(
+                    points
+                        [currTilePos.x]
+                        [currTilePos.y],
+                    pixel
+                );
+        }
+    } else {
+        vec2 tileCentPos[4];
+        tileCentPos[0] = baseTileCoord;
+        tileCentPos[1] = vec2(baseTileCoord.x + sign(diffTileCoord.x), baseTileCoord.y);
+        tileCentPos[2] = vec2(baseTileCoord.x, baseTileCoord.y + sign(diffTileCoord.y));
+        tileCentPos[3] = vec2(baseTileCoord.x + sign(diffTileCoord.x), baseTileCoord.y + sign(diffTileCoord.y));
+
+        for (uint i = 0; i < 4; i++) {
+            vec2 tileDiff = {
+                tileCentPos[i].x - texelCoord.x / float(GRID_TILE_SIZE),
+                tileCentPos[i].y - texelCoord.y / float(GRID_TILE_SIZE)
+            };
+
+            uvec2 currTilePos = {
+                uint(floor(tileCentPos[i].x)),
+                uint(floor(tileCentPos[i].y))
+            };
+
+            // clip tile pos
+            if (currTilePos.x > TILES_COUNT - 1) currTilePos.x = TILES_COUNT - 1;
+            if (currTilePos.y > TILES_COUNT - 1) currTilePos.y = TILES_COUNT - 1;
+
+            combinedValue += 
+                (1.0 - abs(tileDiff.x)) *
+                (1.0 - abs(tileDiff.y)) *
+                getY(
+                    points
+                        [currTilePos.x]
+                        [currTilePos.y],
+                    pixel
+                );
+            
+            // if (texelCoord.x == 30 && texelCoord.y == 3000) {
+            //     debugPrintfEXT("pixel: %f\n", pixel);
+            //     debugPrintfEXT("combining hist %i %i > %f\n", currTilePos.x, currTilePos.y, combinedValue);
+            // }
+        }
+        
+    }
+    
+
+
+    vec4 value = vec4(combinedValue, 0, 0, 0);
+    
+    imageStore(outputImage, texelCoord, value);
+}

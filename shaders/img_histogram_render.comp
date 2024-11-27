@@ -1,0 +1,57 @@
+#version 450
+//#extension GL_EXT_debug_printf : enable
+
+#define GRAD_HISTOGRAM_BINS 1024 // also, workgroupsize
+#define IMAGE_WIDTH 512
+
+layout (local_size_x = IMAGE_WIDTH) in;
+
+layout (binding = 0, rgba8) uniform writeonly image2D outputImage;
+layout (binding = 1, r32ui) uniform uimage1D histImage;
+layout (binding = 2) buffer readonly HistogramMaxPoint {
+    uint maxValue;
+    uint maxBin;
+};
+
+void main() {
+    //debugPrintfEXT("max value %i at bin %i\n", maxValue, maxBin);
+
+    // invocation point
+    float positionConversionFactor = float(GRAD_HISTOGRAM_BINS) / IMAGE_WIDTH;
+    //debugPrintfEXT("%f\n", positionConversionFactor);
+    uint invocationPos = gl_GlobalInvocationID.x;
+    uint histogramBinPos = uint(invocationPos * positionConversionFactor);
+
+    uint value = imageLoad(histImage, int(histogramBinPos)).r;
+
+    // if (histogramBinPos > 2000) {
+    //     debugPrintfEXT("%i> %i\n", histogramBinPos, invocationPos);
+    // }
+
+    ivec2 imageSize = imageSize(outputImage);
+    uint barWidth = 1;
+    uint barHeight = uint(float(value) * (float(imageSize.y) / float(maxValue + 1)));
+    if (barHeight > imageSize.y) barHeight = imageSize.y - 1; // clip bar height
+
+    //debugPrintfEXT("%f, %i\n", barWidth, barHeight);
+
+    // if (histogramBinPos > 0 && histogramBinPos < 100)
+    //     debugPrintfEXT("%i> %i\n", histogramBinPos, hist[histogramBinPos]);
+
+    uint startX = invocationPos;
+    uint startY = imageSize.y - barHeight - 1;
+
+    //debugPrintfEXT("%i \n", startX);
+
+    imageStore(outputImage, ivec2(startX, imageSize.y - 1), vec4(1, 0, 0, 1));
+
+    for (uint x = startX; x < uint(startX + barWidth); x++) {
+        for (uint y = startY; y < startY + barHeight; y++) {
+            if (histogramBinPos <= maxBin && histogramBinPos + positionConversionFactor > maxBin) {
+                imageStore(outputImage, ivec2(x, y), vec4(1, 0, 1, 1));
+            } else {
+                imageStore(outputImage, ivec2(x, y), vec4(1, 1, 1, 1));
+            }
+        }
+    }
+}

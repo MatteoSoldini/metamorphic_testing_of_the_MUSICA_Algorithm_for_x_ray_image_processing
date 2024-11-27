@@ -1,0 +1,94 @@
+#version 450
+//#extension GL_EXT_debug_printf : enable
+
+#define HISTOGRAM_BINS 2048
+#define MAX_POINTS 256
+#define MAX_NOISE_VALUE 0.1
+
+layout (local_size_x = 1) in;
+
+struct Point {
+    float x;
+    float y;
+};
+
+layout (binding = 0) buffer ContrastCurveObject {
+    Point points[MAX_POINTS];
+    uint pointsCount;
+};
+layout (binding = 1) buffer readonly HistogramMaxPoint {
+    uint maxValue;
+    uint maxBin;
+};
+layout (binding = 2) uniform ContrastParameters {
+    float lowContrastFactor;
+    float highContrastFactor;
+};
+
+float interpolate(float from, float to, float percent) {
+    float difference = to - from;
+    return from + (difference * percent);
+}
+
+float linearFunction(Point p1, Point p2, float x) {
+    float m = (p2.y - p1.y) / (p2.x - p1.x);
+
+    return m * x + p1.y;
+}
+
+void generateCurve(Point start, Point middle, Point end) {
+    for (uint i = 0; i <= 10; i++) {
+        // green line
+        float xa = interpolate(start.x, middle.x, i / 10.0);
+        float ya = interpolate(start.y, middle.y, i / 10.0);
+        float xb = interpolate(middle.x, end.x, i / 10.0);
+        float yb = interpolate(middle.y, end.y, i / 10.0);
+
+        // black dot
+        float x = interpolate(xa, xb, i / 10.0);
+        float y = interpolate(ya, yb, i / 10.0);
+
+        points[pointsCount] = Point(x, y);
+        pointsCount++;
+    }
+}
+
+void main() {
+    pointsCount = 0;
+
+    if (lowContrastFactor == 1.0) { // latitude reduction
+        // points[pointsIndex++] = Point(0.0, 1.0);
+        // points[pointsIndex++] = Point(0.05, 1.0 - ((1.0 - highContrastFactor) / 1.5));
+        // points[pointsIndex++] = Point(1.0, highContrastFactor);
+        // generateCurve(
+        //     Point(0.0, 1.0),
+        //     Point(0.0, highContrastFactor),
+        //     Point(0.1, highContrastFactor)
+        // );
+        points[pointsCount++] = Point(0.0, highContrastFactor);
+        points[pointsCount++] = Point(1.0, highContrastFactor);
+    } else {
+        float maxBinPosition = maxBin * (1.0 / HISTOGRAM_BINS) * MAX_NOISE_VALUE;
+        generateCurve(
+            Point(0.0, 1.0),
+            Point(maxBinPosition * 4 / 5.0, lowContrastFactor),
+            Point(maxBinPosition, lowContrastFactor)
+        );
+        generateCurve(
+            Point(maxBinPosition, lowContrastFactor),
+            Point(maxBinPosition * 6 / 5.0, lowContrastFactor),
+            Point(maxBinPosition * 7 / 5.0, lowContrastFactor * 4 / 5.0)
+        );
+        generateCurve(
+            Point(maxBinPosition * 7 / 5.0, lowContrastFactor * 4 / 5.0),
+            Point(maxBinPosition * 2, 1.0),
+            Point(1.0, 1.0)
+        );
+    }
+
+    // if (lowContrastFactor != 1.0) {
+    //     for (int i = 0; i < pointsCount; i++) {
+    //         debugPrintfEXT("%f, %f\n", points[i].x, points[i].y);
+    //     }
+    // }
+}

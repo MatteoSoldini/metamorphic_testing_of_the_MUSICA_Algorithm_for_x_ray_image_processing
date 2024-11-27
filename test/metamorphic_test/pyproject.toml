@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "metamorphic-testing-py"
+version = "0.1.0"
+description = ""
+authors = ["Matteo Soldini <matteo.soldini@live.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+numpy = "^2.0.0"
+pillow = "^10.4.0"
+matplotlib = "^3.9.1"
+opencv-python = "^4.10.0.84"
+scikit-image = "^0.24.0"
+pydicom = "^2.4.4"
+gdcm = "^1.1"
+pylibjpeg = "^2.0.1"
+pylibjpeg-libjpeg = "^2.2.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

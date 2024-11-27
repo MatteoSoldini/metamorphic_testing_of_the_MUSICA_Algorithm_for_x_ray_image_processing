@@ -1,0 +1,34 @@
+#version 450
+//#extension GL_EXT_debug_printf : enable
+
+#define WORKGROUP_SIZE 32
+#define HISTOGRAM_AREA_SIZE 16
+#define GRAD_HISTOGRAM_BINS 1024
+
+layout (local_size_x = WORKGROUP_SIZE, local_size_y = WORKGROUP_SIZE) in;
+
+layout (binding = 0, r32ui) uniform uimage1D histogram;
+layout (binding = 1, r32f) uniform readonly image2D relevantImage;
+layout (binding = 2, r32f) uniform readonly image2D inputImage;
+
+void main() {
+    ivec2 texelCoord = ivec2(
+        gl_GlobalInvocationID.x * HISTOGRAM_AREA_SIZE,
+        gl_GlobalInvocationID.y * HISTOGRAM_AREA_SIZE
+    );
+
+    for (int m = 0; m < HISTOGRAM_AREA_SIZE; m++) {
+        for (int n = 0; n < HISTOGRAM_AREA_SIZE; n++) {
+            float currPixel = imageLoad(inputImage, ivec2(texelCoord.x + m, texelCoord.y + n)).r;
+            
+            if (currPixel == 0.0) return; // out of image
+
+            int binPosition = int(float(currPixel * GRAD_HISTOGRAM_BINS)); //+ 0.5);
+            
+            float relevantPixel = imageLoad(relevantImage, ivec2(texelCoord.x + m, texelCoord.y + n)).r;
+
+            uint result = imageAtomicAdd(histogram, binPosition, uint(relevantPixel * 100));
+            //debugPrintfEXT("%f> %i\n", currPixel, binPosition);
+        }
+    }
+}

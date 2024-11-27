@@ -1,0 +1,31 @@
+#version 450
+//#extension GL_EXT_debug_printf : enable
+
+#define CURVE_POINTS 32 // also workgroup
+#define MAX_CURVE_VALUE 4.0
+
+layout (local_size_x = CURVE_POINTS) in;
+
+layout (binding = 0, rgba8) uniform writeonly image2D outputImage;
+layout (binding = 1) buffer readonly CurveObject {
+    float curve[CURVE_POINTS];
+};
+
+void main() {
+    uint curvePos = gl_GlobalInvocationID.x;
+
+    ivec2 imageSize = imageSize(outputImage);
+
+    float value = curve[curvePos];
+
+    //debugPrintfEXT("%i> %f\n", curvePos, value);
+
+    uint posX = uint(curvePos * (float(imageSize.x) / CURVE_POINTS));
+    // draw 1.0 line
+    imageStore(outputImage, ivec2(posX, uint(float(imageSize.y) * (3.0 / MAX_CURVE_VALUE))), vec4(1, 0, 0, 1));
+    
+    uint posY = imageSize.y - uint(value * (float(imageSize.y) / MAX_CURVE_VALUE));
+
+    imageStore(outputImage, ivec2(posX, posY), vec4(1, 1, 1, 1));
+
+}

@@ -1,0 +1,60 @@
+#version 450
+//#extension GL_EXT_debug_printf : enable
+
+#define WORKGROUP_SIZE 32
+#define MAX_CNR_VALUE 256
+
+layout (local_size_x = WORKGROUP_SIZE, local_size_y = WORKGROUP_SIZE) in;
+
+layout (binding = 0, r32f) uniform writeonly image2D outputImage;
+layout (binding = 1, r32f) uniform readonly image2D bandpassImage;
+layout (binding = 2, r32f) uniform readonly image2D cnrImage;
+layout (binding = 3) uniform NoiseReductionParameters {
+    float lowCnr;
+    float lowFactor;
+    float highCnr;
+    float highFactor;
+};
+
+struct Point {
+    float x;
+    float y;
+};
+
+float linearFunction(Point p1, Point p2, float x) {
+    if (x < p1.x) return p1.y;
+    else if (x > p2.x) return p2.y;
+    else {
+        float m = (p2.y - p1.y) / (p2.x - p1.x);
+        return m * x + p1.y;
+    }
+}
+
+void main() {
+    ivec2 texelCoord = ivec2(gl_GlobalInvocationID.xy);
+
+    float pixel = imageLoad(bandpassImage, texelCoord).r;
+
+    uint scaleFactor = uint(ceil(imageSize(bandpassImage).x / float(imageSize(cnrImage).x)));
+    float cnr = imageLoad(
+        cnrImage,
+        ivec2(
+            texelCoord.x / scaleFactor,
+            texelCoord.y / scaleFactor
+        )
+    ).r * MAX_CNR_VALUE;
+
+    float factor = linearFunction(Point(lowCnr, lowFactor), Point(highCnr, highFactor), cnr);
+
+    // if (texelCoord.x == 0 && texelCoord.y == 0) {
+    //     debugPrintfEXT("size: %i\n", imageSize(bandpassImage).x);
+    //     debugPrintfEXT("%f> %f\n", lowCnr, lowFactor);
+    //     debugPrintfEXT("%f> %f\n", highCnr, highFactor);
+    // }
+
+    //debugPrintfEXT("%f> %f\n", cnr, factor);
+
+    float outPixel = pixel * factor;
+
+    imageStore(outputImage, texelCoord, vec4(outPixel, 0, 0, 0));
+}

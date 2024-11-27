@@ -1,0 +1,77 @@
+#version 450
+//#extension GL_EXT_debug_printf : enable
+
+#define NOISE_HISTOGRAM_BINS 2048 // also, workgroupsize
+#define IMAGE_WIDTH 512
+#define MAX_NOISE_VALUE 0.1
+
+layout (local_size_x = IMAGE_WIDTH) in;
+
+layout (binding = 0, rgba8) uniform writeonly image2D outputImage;
+layout (binding = 1, r32ui) uniform readonly uimage1D histImage;
+layout (binding = 2) buffer readonly HistogramMaxPoint {
+    uint maxValue;
+    uint maxBin;
+};
+
+void main() {
+    // invocation point
+    float positionConversionFactor = 1.0; //float(NOISE_HISTOGRAM_BINS) / IMAGE_WIDTH;
+    //debugPrintfEXT("%f\n", positionConversionFactor);
+    uint invocationPos = gl_GlobalInvocationID.x;
+    
+    uint histogramBinPos = uint(invocationPos * positionConversionFactor);
+    
+    // if (invocationPos == 0) {
+    //     debugPrintfEXT(
+    //         "maxCount: %i, maxPos: %f\n", maxValue, (maxBin / float(NOISE_HISTOGRAM_BINS)) * MAX_NOISE_VALUE
+    //     );
+    // }
+
+    // if (invocationPos == 2) {
+    //     debugPrintfEXT(
+    //         "%i %i %f %i \n",
+    //         histogramBinPos,
+    //         imageLoad(histImage, int(histogramBinPos)).r,
+    //         positionConversionFactor,
+    //         maxValue
+    //     );
+    // }
+
+    uint value = imageLoad(histImage, int(histogramBinPos)).r;
+
+    // if (histogramBinPos > 2000) {
+    //     debugPrintfEXT("%i> %i\n", histogramBinPos, invocationPos);
+    // }
+
+    ivec2 imageSize = imageSize(outputImage);
+    uint barWidth = 1;
+    uint barHeight = uint(float(value) * (float(imageSize.y) / float(maxValue + 1)));
+    if (barHeight > imageSize.y) barHeight = imageSize.y - 1; // clip bar height
+
+    //debugPrintfEXT("%f, %i\n", barWidth, barHeight);
+
+    // if (invocationPos > 0 && invocationPos < 100)
+    //     debugPrintfEXT("value %i \n", imageLoad(histImage, int(maxBin - 1)).r);
+
+    uint startX = invocationPos;
+    uint startY = imageSize.y - barHeight - 1;
+
+    //debugPrintfEXT("%i \n", startX);
+
+    for (uint y = 0; y < imageSize.y; y++) {
+        imageStore(outputImage, ivec2(invocationPos, y), vec4(0, 0, 0, 1));
+    }
+
+    imageStore(outputImage, ivec2(startX, imageSize.y - 1), vec4(1, 0, 0, 1));
+
+    for (uint x = startX; x < uint(startX + barWidth); x++) {
+        for (uint y = startY; y < startY + barHeight; y++) {
+            if (histogramBinPos <= maxBin && histogramBinPos + positionConversionFactor > maxBin) {
+                imageStore(outputImage, ivec2(x, y), vec4(0, 1, 0, 1));
+            } else {
+                imageStore(outputImage, ivec2(x, y), vec4(1, 1, 1, 1));
+            }
+        }
+    }
+}

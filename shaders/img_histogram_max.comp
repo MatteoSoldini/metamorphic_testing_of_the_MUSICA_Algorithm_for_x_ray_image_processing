@@ -1,0 +1,32 @@
+#version 450
+//#extension GL_EXT_debug_printf : enable
+
+//#define HISTOGRAM_BINS 2048
+
+layout (local_size_x = 1) in;
+
+layout (binding = 0) buffer HistogramMaxPoint {
+    uint maxValue;
+    uint maxBin;
+};
+layout (binding = 1, r32ui) uniform readonly uimage1D histogram;
+
+void main() {
+    maxValue = 0;
+    maxBin = 0;
+
+    uint bins = imageSize(histogram).x;
+    //debugPrintfEXT("bins %i\n", bins);
+    for (uint i = 0; i < bins; i++) {
+        uint value = imageLoad(histogram, int(i)).r;
+
+        //debugPrintfEXT("%i > %i\n", i, value);
+
+        if (value > maxValue) {
+            maxValue = value;
+            maxBin = i;
+        }
+    }
+
+    //debugPrintfEXT("max value %i at bin %i\n", maxValue, maxBin);
+}

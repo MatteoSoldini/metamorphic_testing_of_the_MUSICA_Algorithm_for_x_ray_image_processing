@@ -1,0 +1,193 @@
+#version 450
+//#extension GL_EXT_debug_printf : enable
+
+#define GRAD_HISTOGRAM_BINS 1024
+#define MAX_POINTS 256
+
+layout (local_size_x = 1) in;
+
+struct Point {
+    float x;
+    float y;
+};
+
+layout (binding = 0) buffer GradationCurveObject {
+    Point points[MAX_POINTS];
+    uint pointsCount;
+
+    float t0;
+    float ta;
+    float t1;
+};
+layout (binding = 1, r32ui) uniform readonly uimage1D histogram;
+uint pointsIndex = 0;
+
+float interpolate(float from, float to, float percent) {
+    float difference = to - from;
+    return from + (difference * percent);
+}
+
+void generateCurve(Point start, Point middle, Point end) {
+    for (uint i = 0; i < 10; i++) {
+        // green line
+        float xa = interpolate(start.x, middle.x, i / 10.0);
+        float ya = interpolate(start.y, middle.y, i / 10.0);
+        float xb = interpolate(middle.x, end.x, i / 10.0);
+        float yb = interpolate(middle.y, end.y, i / 10.0);
+
+        // black dot
+        float x = interpolate(xa, xb, i / 10.0);
+        float y = interpolate(ya, yb, i / 10.0);
+
+        //debugPrintfEXT("%i %f %f\n", i, x, y);
+
+        points[pointsIndex++] = Point(x, y);
+    }
+}
+
+const uint lowestRelevantGradBin = 10;
+
+void main() {
+    // parameters
+    float m = 3.0;
+
+    t0 = 0.0;
+    t1 = 0.0;
+    ta = 0.0;
+    float y_m = 0.5;
+    uint t0Position = 0;
+    uint t1Position = 0;
+
+    uint maxCount = 0;
+    uint maxPosition = 0;
+    uint meanCount = 0;
+    uint meanSum = 0;
+
+    // find mean
+    for (uint i = lowestRelevantGradBin; i < GRAD_HISTOGRAM_BINS; i++) {
+        uint count = imageLoad(histogram, int(i)).r / 100;
+
+        meanCount += count * i;
+        meanSum += count;
+    }
+
+    float meanHistPos = float(meanCount / meanSum) / GRAD_HISTOGRAM_BINS;
+
+    // find max
+    for (uint i = lowestRelevantGradBin; i < uint(meanHistPos * float(GRAD_HISTOGRAM_BINS)); i++) {
+        uint count = imageLoad(histogram, int(i)).r / 100;
+
+        if (count > maxCount) {
+            maxCount = count;
+            maxPosition = i;
+        }
+    }
+
+    //debugPrintfEXT("%i %i\n", maxPosition, maxCount);
+
+    uint lowThreshold = uint(maxCount * 0.05);
+    uint highThreshold = uint(maxCount * 0.005);
+    
+    //debugPrintfEXT("high threshold: %i\n", highThreshold);
+
+    // find t0
+    for (uint i = maxPosition; i > 0; i--) {
+        uint count = imageLoad(histogram, int(i)).r / 100;
+        float position = float(i * (1.0 / GRAD_HISTOGRAM_BINS));
+
+        if (count >= lowThreshold && position > 0) {
+            t0 = position;
+            t0Position = i;
+        }
+        else {
+            break; // stop search for t1 if under threshold
+        }
+    }
+
+    // find t1
+    for (uint i = maxPosition; i < GRAD_HISTOGRAM_BINS; i++) {
+        uint count = imageLoad(histogram, int(i)).r / 100;
+        float position = float(i * (1.0 / GRAD_HISTOGRAM_BINS));
+
+        if (count > 0) {
+        //if (count >= highThreshold) {
+            t1 = position;
+            t1Position = i;
+        } else {
+            break;
+        }
+    }
+
+    float maxHistPos = maxPosition * (1.0 / GRAD_HISTOGRAM_BINS);
+
+    // set ta at mid of the window
+    //ta = (t0 + t1) / 2.0;
+
+    //set ta at mid of mid of window and mean value
+    //ta = (((t0 + t1) / 2.0) + meanHistPos) / 2.0;
+
+    // // set ta to the mean hist value
+    //ta = meanHistPos;
+
+    // set ta to the highest hist value
+    ta = maxHistPos;
+
+    // ta as mid point between mean value and peak value
+    //ta = (meanHistPos + maxHistPos) / 2.0;
+
+    // debugPrintfEXT("t0: %f ta: %f max position: %f t1: %f\n", t0, ta, maxPosition * (1.0 / GRAD_HISTOGRAM_BINS) ,t1);
+    
+    t0 -= .01;
+    if (t0 < 0.0) t0 = 0.0;
+
+    //t1 += .2;
+    if (t1 > 1.0) t1 = 1.0;
+    
+    float tf = -(0.5 / m) + ta;
+    
+    // clip tf
+    if (tf < t0) tf = t0;
+    
+    // generate curve
+    points[pointsIndex++] = Point(0.0, 0.0);
+
+    //debugPrintfEXT("%f %f %f\n", t0, tf, ta);
+
+    generateCurve(
+        Point(t0, 0.0),
+        Point(tf, 0.0),
+        Point(ta, y_m)
+    );
+    
+    if (tf == t0) // if tf clipped
+        m = y_m / (ta - tf);
+
+    float ts = (y_m / m) + ta;
+
+    // //debugPrintfEXT("%f %f %f\n", ta, ts, t1);
+
+    generateCurve(
+        Point(ta, y_m),
+        Point(ts, 1.0),
+        Point(t1, 1.0)
+    );
+
+    // normalize curve
+    // points[pointsIndex++] = Point(t0, 0.0);
+    // points[pointsIndex++] = Point(t1, 1.0);
+
+    points[pointsIndex++] = Point(1.0, 1.0);
+
+    pointsCount = pointsIndex;
+
+    //debugPrintfEXT("%i\n", pointsIndex);
+    // for (uint i = 0; i < pointsIndex; i++) {
+    //     debugPrintfEXT("%f %f\n", points[i].x, points[i].y);
+    // }
+
+    // float yStep = 1.0 / CURVE_POINTS;
+    // for (uint i = 0; i < CURVE_POINTS; i++) {
+    //     //curve[i] = getY(i * yStep);
+    //     debugPrintfEXT("%f %f\n", i * yStep, getY(i * yStep));
+    // }
+}

@@ -1,0 +1,48 @@
+#version 450
+//#extension GL_EXT_debug_printf : enable
+
+#define WORKGROUP_SIZE 32
+#define HISTOGRAM_BINS 2048
+#define MAX_CNR_VALUE 256
+#define MAX_NOISE_VALUE 0.1
+
+layout (local_size_x = WORKGROUP_SIZE, local_size_y = WORKGROUP_SIZE) in;
+
+layout (binding = 0, r32f) uniform writeonly image2D outputImage;
+layout (binding = 1, r32f) uniform readonly image2D sdevImage;
+layout (binding = 2) buffer HistogramMaxPoint {
+    uint maxValue;
+    uint maxBin;
+};
+
+void main() {
+    // invocation point
+    ivec2 texelCoord = ivec2(gl_GlobalInvocationID.xy);
+
+    float referenceNoiseLevel = maxBin * (1.0 / HISTOGRAM_BINS) * MAX_NOISE_VALUE;
+
+    // clip reference noise level
+    if (referenceNoiseLevel == 0.0) referenceNoiseLevel = (1.0 / HISTOGRAM_BINS) * MAX_NOISE_VALUE;
+    
+    float sdev = imageLoad(sdevImage, texelCoord).r;
+
+    //debugPrintfEXT("%i %f\n", maxBin, referenceNoiseLevel);
+
+    float cnr = sdev / referenceNoiseLevel;
+
+    // if (texelCoord.x == 0 && texelCoord.y == 0)
+    //     debugPrintfEXT("max: %i, bin: %i, value: %f\n", maxValue, maxBin, referenceNoiseLevel);
+
+    //debugPrintfEXT("%i,%i %f\n", texelCoord.x, texelCoord.y, sdev);
+    if (texelCoord.x == 1320 && texelCoord.y == 460) {
+        //debugPrintfEXT("%f\n", sdev);
+        //debugPrintfEXT("cnr> max value %f at bin %i\n", referenceNoiseLevel, maxBin);
+        //debugPrintfEXT("%f\n", cnr);
+    }
+
+    float pixel = cnr / float(MAX_CNR_VALUE);
+
+    vec4 value = vec4(pixel, 0, 0, 0);
+    
+    imageStore(outputImage, texelCoord, value);
+}

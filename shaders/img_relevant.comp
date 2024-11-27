@@ -1,0 +1,74 @@
+#version 450
+//#extension GL_EXT_debug_printf : enable
+
+#define WORKGROUP_SIZE 32
+#define MAX_CNR_VALUE 256
+
+layout (local_size_x = WORKGROUP_SIZE, local_size_y = WORKGROUP_SIZE) in;
+
+struct Point {
+    float x;
+    float y;
+};
+
+layout (binding = 0, r32f) uniform writeonly image2D outputImage;
+layout (binding = 1, r32f) uniform readonly image2D normalizedImage;
+layout (binding = 2, r32f) uniform readonly image2D cnrImage;
+
+vec4 truePixel = vec4(1, 0, 0, 0);
+vec4 falsePixel = vec4(0, 0, 0, 0);
+
+uint border = 100;
+
+float cnrLowLimit = 1.0;
+float cnrRampLength = 5.0;
+float cnrHighLimit = float(MAX_CNR_VALUE);
+float k = 5.0;
+
+void main() {
+    ivec2 texelCoord = ivec2(gl_GlobalInvocationID.xy);
+
+    float pixel = imageLoad(normalizedImage, texelCoord).r;
+    uint scaleFactor = uint(ceil(imageSize(normalizedImage).x / float(imageSize(cnrImage).x)));
+    float cnr = imageLoad(
+        cnrImage,
+        ivec2(
+            texelCoord.x / scaleFactor,
+            texelCoord.y / scaleFactor
+        )
+    ).r * MAX_CNR_VALUE;
+
+    ivec2 size = imageSize(outputImage);
+
+    //debugPrintfEXT("%f\n", cnr);
+    if (cnr >= cnrLowLimit &&
+        cnr <= cnrLowLimit + cnrRampLength &&
+        texelCoord.x > border &&
+        texelCoord.x < size.x - border &&
+        texelCoord.y > border &&
+        texelCoord.y < size.y - border
+    ) { // linear
+        float value = pow(cnr / (cnrLowLimit + cnrRampLength), k);
+        imageStore(outputImage, texelCoord, vec4(value, 0, 0, 0));
+    } else if (
+        cnr >= cnrLowLimit + cnrRampLength &&
+        cnr <= cnrHighLimit &&
+        pixel <= 0.90 &&
+        texelCoord.x > border &&
+        texelCoord.x < size.x - border &&
+        texelCoord.y > border &&
+        texelCoord.y < size.y - border
+    )
+        imageStore(outputImage, texelCoord, truePixel);
+    else imageStore(outputImage, texelCoord, falsePixel);
+
+    // if (pixel <= 0.25 && cnr >= 0.4) {                          // cnr for shadows
+    //     imageStore(outputImage, texelCoord, truePixel);
+    // } else if (pixel <= 0.75 && cnr >= 1.0 && cnr <= 100) {     // cnr for mid
+    //     imageStore(outputImage, texelCoord, truePixel);
+    // } else if (cnr >= 3.0 && pixel <= .98) {                    // cnr for highlight
+    //     imageStore(outputImage, texelCoord, truePixel);
+    // } else {
+    //     imageStore(outputImage, texelCoord, falsePixel);
+    // }
+}

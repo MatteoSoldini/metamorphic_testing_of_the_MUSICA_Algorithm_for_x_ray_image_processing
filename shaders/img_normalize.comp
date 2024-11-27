@@ -1,0 +1,35 @@
+#version 450
+//#extension GL_EXT_debug_printf : enable
+
+#define WORKGROUP_SIZE 32
+
+layout (local_size_x = WORKGROUP_SIZE, local_size_y = WORKGROUP_SIZE) in;
+
+layout (binding = 0, r32f) uniform readonly image2D inImage;
+layout (binding = 1, r32f) uniform readonly image2D maxImage;
+layout (binding = 2, r32f) uniform readonly image2D minImage;
+layout (binding = 3, r32f) uniform writeonly image2D outImage;
+
+void main() {
+    // invocation point
+    ivec2 texelCoord = ivec2(gl_GlobalInvocationID.xy);
+
+    float maxValue = imageLoad(maxImage, ivec2(0, 0)).r;
+    float minValue = imageLoad(minImage, ivec2(0, 0)).r;
+
+    //debugPrintfEXT("max value: %i\n", maxValue);
+
+    float inPixel = imageLoad(inImage, texelCoord).r;
+
+    float outPixel = float(inPixel - minValue) / float(maxValue - minValue);
+
+    // clamp
+    clamp(outPixel, 0.0, 1.0);
+
+    // if (texelCoord.x == 0 && texelCoord.y == 0)
+    //     debugPrintfEXT("%i %i %f\n", inPixel, maxValue, outPixel);
+
+    vec4 value = vec4(outPixel, 0, 0, 0);
+    
+    imageStore(outImage, texelCoord, value);
+}

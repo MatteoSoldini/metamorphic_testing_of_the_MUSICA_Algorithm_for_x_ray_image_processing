@@ -1,0 +1,32 @@
+#version 450
+//#extension GL_EXT_debug_printf : enable
+
+#define WORKGROUP_SIZE 32
+#define REDUCE_AREA_SIZE 8
+
+layout (local_size_x = WORKGROUP_SIZE, local_size_y = WORKGROUP_SIZE) in;
+
+layout (binding = 0, r32f) uniform readonly image2D inputImage;
+layout (binding = 1, r32f) uniform writeonly image2D outputImage;
+
+void main() {
+    // invocation point
+    ivec2 invocationCoord = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 inputBaseCoords = invocationCoord * REDUCE_AREA_SIZE;
+
+    //ivec2 imageSize = imageSize(inputImage);
+
+    float minValue = imageLoad(inputImage, invocationCoord).r;
+    //ivec2 minPosition = ivec2(0, 0);
+
+    for (int m = 0; m < REDUCE_AREA_SIZE; m++) {
+        for (int n = 0; n < REDUCE_AREA_SIZE; n++) {
+            ivec2 position = inputBaseCoords + ivec2(m, n);
+            float pixelValue = imageLoad(inputImage, position).r;
+            minValue = min(minValue, pixelValue);
+        }
+    }
+    
+    uvec4 value = uvec4(minValue, 0, 0, 0);
+    imageStore(outputImage, invocationCoord, value);
+}

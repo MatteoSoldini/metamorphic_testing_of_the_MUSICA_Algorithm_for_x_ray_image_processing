@@ -1,0 +1,49 @@
+#version 450
+//#extension GL_EXT_debug_printf : enable
+
+#define WORKGROUP_SIZE 32
+#define HISTOGRAM_AREA_SIZE 16
+#define NOISE_HISTOGRAM_BINS 2048
+#define MAX_NOISE_VALUE 0.1
+
+layout (local_size_x = WORKGROUP_SIZE, local_size_y = WORKGROUP_SIZE) in;
+
+layout (binding = 0, r32ui) uniform uimage1D histogram;
+layout (binding = 1, r32f) uniform readonly image2D sdevImage;
+
+void main() {
+    ivec2 texelCoord = ivec2(
+        gl_GlobalInvocationID.x * HISTOGRAM_AREA_SIZE,
+        gl_GlobalInvocationID.y * HISTOGRAM_AREA_SIZE
+    );
+
+    for (int m = 0; m < HISTOGRAM_AREA_SIZE; m++) {
+        for (int n = 0; n < HISTOGRAM_AREA_SIZE; n++) {
+            float currPixel = 
+                imageLoad(sdevImage, ivec2(texelCoord.x + m, texelCoord.y + n)).r;
+
+            // if (texelCoord.x == 0 && texelCoord.y == 0) {
+            //     debugPrintfEXT("%f\n", currPixel);
+            // }
+            
+            if (currPixel == 0.0) break;   // out of image
+
+            float adjustedCurrPixel = currPixel / MAX_NOISE_VALUE;
+
+            if (adjustedCurrPixel > 1.0) break;    // out of range
+
+            int binPosition = int(adjustedCurrPixel * float(NOISE_HISTOGRAM_BINS) + 0.5);
+            
+            //int binPosition = int(currPixel * float(NOISE_HISTOGRAM_BINS));
+
+            if (binPosition == 0) break;
+
+            // if (binPosition == 6) {
+            //     debugPrintfEXT("%f %f\n", currPixel, adjustedCurrPixel);
+            // }
+
+            uint result = imageAtomicAdd(histogram, binPosition, 1);
+            //debugPrintfEXT("%f> %i\n", currPixel, binPosition);
+        }
+    }
+}

@@ -1,0 +1,20 @@
+#version 450
+
+#define WORKGROUP_SIZE 32
+
+layout (local_size_x = WORKGROUP_SIZE, local_size_y = WORKGROUP_SIZE) in;
+
+layout (binding = 0, r32f) uniform writeonly image2D outputImage;
+layout (binding = 1, r32f) uniform readonly image2D inputImageA;
+layout (binding = 2, r32f) uniform readonly image2D inputImageB;
+
+void main() {
+    // invocation point
+    ivec2 texelCoord = ivec2(gl_GlobalInvocationID.xy);
+
+    float pixel = imageLoad(inputImageA, texelCoord).r - imageLoad(inputImageB, texelCoord).r;
+
+    vec4 value = vec4(pixel, 0, 0, 0);
+    
+    imageStore(outputImage, texelCoord, value);
+}

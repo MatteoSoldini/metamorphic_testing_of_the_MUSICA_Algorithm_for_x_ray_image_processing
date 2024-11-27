@@ -1,0 +1,56 @@
+#version 450
+//#extension GL_EXT_debug_printf : enable
+
+#define WORKGROUP_SIZE 32
+#define REDUCE_AREA_SIZE 8
+
+layout (local_size_x = WORKGROUP_SIZE, local_size_y = WORKGROUP_SIZE) in;
+
+layout (binding = 0, r32f) uniform readonly image2D inputImage;
+layout (binding = 1, r32f) uniform writeonly image2D outputImage;
+
+void main() {
+    // invocation point
+    ivec2 invocationCoord = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 inputBaseCoords = invocationCoord * REDUCE_AREA_SIZE;
+
+    //ivec2 imageSize = imageSize(inputImage);
+
+    float maxValue = 0;
+    ivec2 maxPosition = ivec2(0, 0); 
+
+    //uint borderSize = 0;
+    //if (imageSize.x == 1023) borderSize = 5;
+
+    for (int m = 0; m < REDUCE_AREA_SIZE; m++) {
+        for (int n = 0; n < REDUCE_AREA_SIZE; n++) {
+            ivec2 position = inputBaseCoords + ivec2(m, n);
+            float pixelValue = imageLoad(inputImage, position).r;
+
+            // if (position.x == 20 && position.y == 3000) {
+            //     debugPrintfEXT("20, 3000\n");
+            // }
+
+            // if (pixelValue > maxValue) {
+            //     maxValue = pixelValue;
+            //     maxPosition = position;
+            // }
+
+            maxValue = max(maxValue, pixelValue);
+        }
+    }
+
+    //debugPrintfEXT("%i, %i> %f\n", maxPosition.x, maxPosition.y, maxValue);
+
+    // if (basePixelCoord.y > 1000)
+    //     debugPrintfEXT("%i, %i> %i\n", invocationCoord.x, invocationCoord.y, maxValue);
+
+    // if (imageSize.x == 1023)
+    //     debugPrintfEXT("%i %i\n", maxPosition.x, maxPosition.y);
+    
+    //debugPrintfEXT("%i %i\n", imageSize.x, imageSize.y);
+    
+    uvec4 value = uvec4(maxValue, 0, 0, 0);
+
+    imageStore(outputImage, invocationCoord, value);
+}

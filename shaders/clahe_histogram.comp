@@ -1,0 +1,45 @@
+#version 450
+//#extension GL_EXT_debug_printf : enable
+
+#define TILES_COUNT 4
+#define WORKGROUP_SIZE 32
+
+layout (local_size_x = WORKGROUP_SIZE, local_size_y = WORKGROUP_SIZE) in;
+
+layout (binding = 0, r32ui) uniform uimage3D histograms; // tile x, tile y, bins
+layout (binding = 1, r32f) uniform readonly image2D inputImage;
+layout (binding = 2, r16) uniform readonly image2D relevantImage;
+
+void main() {
+    uvec2 texelCoord = gl_GlobalInvocationID.xy;
+
+    float currPixel = imageLoad(inputImage, ivec2(texelCoord)).r;
+
+    ivec3 histSize = imageSize(histograms);
+
+    int binPosition = int(float(currPixel * (histSize.z - 1)) + 0.5);
+
+    // ivec2 workgroupId = ivec2(
+    //     gl_WorkGroupID.x,
+    //     gl_WorkGroupID.y
+    // );
+
+    //debugPrintfEXT("%i, %i\n", workgroupId.x, workgroupId.y);
+
+    // if (workgroupId.x == 95 && workgroupId.y == 0) {
+    //     debugPrintfEXT("%i \n", binPosition);
+    // }
+
+    uvec2 inputImageSize = imageSize(inputImage);
+    uint tilePosX = uint(float(texelCoord.x) / float(inputImageSize.x) * float(TILES_COUNT));
+    uint tilePosY = uint(float(texelCoord.y) / float(inputImageSize.y) * float(TILES_COUNT));
+
+    float relevantPixel = imageLoad(relevantImage, ivec2(texelCoord)).r;
+
+    if (relevantPixel == 1.0)
+        imageAtomicAdd(
+            histograms,
+            ivec3(tilePosX, tilePosY, binPosition),
+            1
+        );
+}

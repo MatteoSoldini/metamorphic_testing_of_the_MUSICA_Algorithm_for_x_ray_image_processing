@@ -1,0 +1,66 @@
+#version 450
+//#extension GL_EXT_debug_printf : enable
+
+#define WORKGROUP_SIZE 32
+#define MAX_POINTS 256
+
+layout (local_size_x = WORKGROUP_SIZE, local_size_y = WORKGROUP_SIZE) in;
+
+struct Point {
+    float x;
+    float y;
+};
+
+layout (binding = 0, r32f) uniform writeonly image2D outputImage;
+layout (binding = 1, r32f) uniform readonly image2D inputImage;
+layout (binding = 2) buffer ContrastCurveObject {
+    Point points[MAX_POINTS];
+    uint pointsCount;
+};
+layout (binding = 3, r32f) uniform readonly image2D sdevImage;
+
+float linearFunction(Point p1, Point p2, float x) {
+    float m = (p2.y - p1.y) / (p2.x - p1.x);
+    return m * x + p1.y;
+}
+
+float getY(float x) {
+    for (uint i = 0; i < pointsCount; i++) {
+        if (points[i].x == x) return points[i].y;
+
+        if (points[i].x <= x && points[i + 1].x >= x)
+            return linearFunction(points[i], points[i + 1], x - points[i].x);
+    }
+
+    return 0.0;
+}
+
+void main() {
+    // invocation point
+    ivec2 texelCoord = ivec2(gl_GlobalInvocationID.xy);
+
+    float pixel = imageLoad(inputImage, texelCoord).r;
+    float sdev = imageLoad(sdevImage, texelCoord).r;
+
+    // debug
+    // debugPrintfEXT(
+    //     "sdev is %f corresponding to curve pos %i\n",
+    //     sdev,
+    //     curvePos
+    // );
+
+    ivec2 size = imageSize(outputImage);
+
+    // if (size.x == 48) {
+    //     debugPrintfEXT(
+    //         "curvePos: %i\n",
+    //         curvePos
+    //     );
+    // }
+
+    pixel *= getY(sdev);
+
+    vec4 value = vec4(pixel, 0, 0, 0);
+    
+    imageStore(outputImage, texelCoord, value);
+}

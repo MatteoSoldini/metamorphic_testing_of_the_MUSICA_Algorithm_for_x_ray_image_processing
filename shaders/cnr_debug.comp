@@ -1,0 +1,21 @@
+#version 450
+//#extension GL_EXT_debug_printf : enable
+
+#define WORKGROUP_SIZE 32
+#define MAX_CNR_VALUE 256
+
+layout (local_size_x = WORKGROUP_SIZE, local_size_y = WORKGROUP_SIZE) in;
+
+layout (binding = 0, rgba8) uniform writeonly image2D outputImage;
+layout (binding = 1, r32f) uniform readonly image2D cnrImage;
+
+void main() {
+    // invocation point
+    ivec2 texelCoord = ivec2(gl_GlobalInvocationID.xy);
+    
+    float pixel = imageLoad(cnrImage, texelCoord).r;    
+
+    vec4 value = vec4(pixel, pixel, pixel, 1.0);
+    
+    imageStore(outputImage, texelCoord, value);
+}

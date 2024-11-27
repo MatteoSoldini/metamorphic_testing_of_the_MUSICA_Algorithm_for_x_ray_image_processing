@@ -1,0 +1,50 @@
+#version 450
+
+#define WORKGROUP_SIZE 32
+
+layout (local_size_x = WORKGROUP_SIZE, local_size_y = WORKGROUP_SIZE) in;
+
+layout (binding = 0, r32f) uniform writeonly image2D outputImage;
+layout (binding = 1, r32f) uniform readonly image2D inputImage;
+
+int mirror(int n, int lowerLimit, int upperLimit) {
+    int newValue = n;
+    if (newValue > upperLimit) newValue = upperLimit - (newValue - upperLimit);
+    else if (newValue < lowerLimit) newValue = lowerLimit + (lowerLimit - newValue);
+    clamp(newValue, lowerLimit, upperLimit);
+    return newValue;
+}
+
+void main() {
+    // invocation point
+    ivec2 texelCoord = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 imageSize = imageSize(inputImage);
+
+    const float a = 0.3;
+    const float weight[5] = {
+        1.0 / 4 - a / 2,
+        1.0 / 4,
+        a,
+        1.0 / 4,
+        1.0 / 4 - a / 2
+    };
+
+    float pixel = 0;
+
+    for (int m = 0; m < 5; m++) {
+        for (int n = 0; n < 5; n++) {
+            float currPixel = imageLoad(
+                inputImage,
+                ivec2(
+                    mirror(texelCoord.x + m - 2, 0, imageSize.x - 1),
+                    mirror(texelCoord.y + n - 2, 0, imageSize.y - 1)
+                )
+            ).r;
+            pixel += weight[m] * weight[n] * currPixel;
+        }
+    }
+
+    vec4 value = vec4(pixel, 0, 0, 0);
+    
+    imageStore(outputImage, texelCoord, value);
+}
